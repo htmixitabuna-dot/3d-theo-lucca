@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { CityHUDState, BackpackItem } from '../simulation/GameEngine';
 import { soundManager } from '../simulation/audio';
+import { NavigationMiniMap } from './NavigationMiniMap';
 
 export interface GtaKidHUDProps {
   hudState: CityHUDState;
@@ -40,6 +41,7 @@ export interface GtaKidHUDProps {
   onOpenJobsModal: () => void;
   onSwitchPhase?: (phase: 1 | 2 | 3) => void;
   onActivateLightTube?: () => void;
+  onSetGPSDestination?: (x: number, z: number, name: string) => void;
 }
 
 export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
@@ -61,6 +63,7 @@ export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
   onOpenJobsModal,
   onSwitchPhase,
   onActivateLightTube,
+  onSetGPSDestination,
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [touchSensitivity, setTouchSensitivity] = useState(1.4);
@@ -401,31 +404,19 @@ export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
             </button>
           </div>
 
-          {/* Minimapa Circular Radar Estilo GTA */}
-          <div 
-            onClick={onOpenJobsModal}
-            className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-slate-950/95 border-2 border-slate-600 overflow-hidden shadow-2xl flex items-center justify-center cursor-pointer hover:border-amber-400 transition"
-            title="Radar GTA - Toque para ver mapa e trabalhos"
-          >
-            <div className="absolute inset-1.5 rounded-full border border-slate-800" />
-            <div className="absolute w-full h-[1px] bg-slate-800/80" />
-            <div className="absolute h-full w-[1px] bg-slate-800/80" />
-
-            <span className="absolute top-0.5 text-[8px] font-black text-amber-400 font-mono">N</span>
-
-            {/* Marcador do Objetivo Ativo no Radar */}
-            <div 
-              className="absolute w-2.5 h-2.5 rounded-full bg-amber-400 border border-white shadow-[0_0_8px_#f59e0b] animate-pulse"
-              style={{
-                top: `${Math.max(15, Math.min(65, 45 - (hudState.distanceToTarget * 0.9)))}%`,
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-              }}
-            />
-
-            {/* Marcador do Theo Lucca no centro */}
-            <div className="w-2.5 h-2.5 border-l-2 border-b-2 border-sky-400 rotate-45 transform shadow-[0_0_6px_#38bdf8]" />
-          </div>
+          {/* Minimapa e GPS de Navegação Expansível Estilo GTA / Free Fire */}
+          <NavigationMiniMap
+            playerX={hudState.playerX ?? -14}
+            playerZ={hudState.playerZ ?? -14}
+            playerRotation={hudState.playerRotationY ?? 0}
+            targetPos={hudState.targetBeaconPos ?? null}
+            expansionLevel={hudState.cityExpansionLevel ?? 1}
+            locations={hudState.allLocations ?? []}
+            npcs={hudState.allNPCs ?? []}
+            cars={hudState.allCars ?? []}
+            motos={hudState.allMotos ?? []}
+            onSetGPSDestination={onSetGPSDestination}
+          />
         </div>
 
       </div>
@@ -473,14 +464,41 @@ export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
       )}
 
       {/* =========================================================================
+          ANÚNCIO DE CIDADE EXPANDIDA (NOVO BAIRRO DESBLOQUEADO)
+         ========================================================================= */}
+      {hudState.expansionAnnouncement && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-40 pointer-events-auto max-w-md w-full px-4 animate-bounce">
+          <div className="bg-gradient-to-r from-emerald-600 via-amber-500 to-yellow-400 text-slate-950 border-[3px] border-white rounded-2xl p-3 text-center shadow-[0_0_40px_rgba(245,158,11,0.8)]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-2xl animate-spin">🏗️</span>
+              <div className="min-w-0 text-center flex-1">
+                <p className="text-xs sm:text-sm font-black font-['Rajdhani'] uppercase tracking-wider text-slate-950 leading-tight">
+                  CIDADE EXPANDIDA COM SUCESSO!
+                </p>
+                <p className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">
+                  {hudState.expansionAnnouncement.name} desbloqueado no mapa!
+                </p>
+              </div>
+              <span className="text-2xl animate-spin">✨</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
           BALÃO DE DIÁLOGO DINÂMICO DOS NPCS ("OI THEO!", CONVERSAS E DICAS)
          ========================================================================= */}
       {hudState.dialogueText && (
-        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none max-w-sm w-full px-4 animate-bounce-short">
-          <div className="bg-slate-950/95 border-2 border-amber-400/90 rounded-2xl px-4 py-2.5 text-center shadow-[0_0_25px_rgba(245,158,11,0.35)] backdrop-blur-md">
-            <p className="text-xs sm:text-sm font-bold text-amber-300 font-sans leading-snug">
-              {hudState.dialogueText}
-            </p>
+        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none max-w-md w-full px-4 animate-bounce-short">
+          <div className="bg-slate-950/95 border-2 border-amber-400/90 rounded-2xl px-4 py-2.5 shadow-[0_0_30px_rgba(245,158,11,0.45)] backdrop-blur-md flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 border border-white flex items-center justify-center flex-shrink-0 text-slate-950 font-black shadow">
+              <Volume2 className="w-4 h-4 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm font-bold text-amber-300 font-sans leading-snug">
+                {hudState.dialogueText}
+              </p>
+            </div>
           </div>
         </div>
       )}

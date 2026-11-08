@@ -61,6 +61,16 @@ export default function App() {
     lightTubeDist: 999,
     phaseTargetCount: 0,
     phaseTargetTotal: 24,
+    cityExpansionLevel: 1,
+    playerX: -14,
+    playerZ: -14,
+    playerRotationY: Math.PI * 0.75,
+    targetBeaconPos: null,
+    allLocations: [],
+    allNPCs: [],
+    allCars: [],
+    allMotos: [],
+    expansionAnnouncement: null,
   });
 
   // Inicialização do GameEngine Three.js
@@ -102,6 +112,14 @@ export default function App() {
           spread: 60,
           origin: { y: 0.75 },
           colors: ['#a855f7', '#38bdf8', '#f59e0b'],
+        });
+      },
+      onCityExpanded: (_name, _desc) => {
+        confetti({
+          particleCount: 180,
+          spread: 110,
+          origin: { y: 0.45 },
+          colors: ['#22c55e', '#38bdf8', '#fbbf24', '#f59e0b', '#ec4899'],
         });
       },
     });
@@ -261,6 +279,7 @@ export default function App() {
             onOpenJobsModal={() => setShowJobsModal(true)}
             onSwitchPhase={(phase) => gameEngineRef.current?.switchPhase(phase)}
             onActivateLightTube={() => gameEngineRef.current?.activateLightTube()}
+            onSetGPSDestination={(x, z, name) => gameEngineRef.current?.setGPSDestination(x, z, name)}
           />
         )}
 

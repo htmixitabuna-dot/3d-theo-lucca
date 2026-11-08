@@ -2940,6 +2940,8 @@ export function createCityScene(): CitySceneObjects {
       name: data.name,
       role: data.role,
       phrase: data.phrase,
+      gender: data.gender,
+      tips: data.tips,
       position: data.pos.clone(),
       walkTimer: Math.random() * 5,
       head,
@@ -3012,6 +3014,356 @@ export function createCityScene(): CitySceneObjects {
       beaconGroup.visible = true;
       beaconGroup.position.set(pos.x, 0, pos.z);
     }
+  };
+
+  // =========================================================================
+  // --- SISTEMA DE EXPANSÃO DINÂMICA DA CIDADE (5 NÍVEIS / BAIRROS) ---
+  // =========================================================================
+  let currentExpansionLevel = 1;
+
+  // 1. DISTRITO 2: BAIRRO COMERCIAL & SHOPPING CENTER (Desbloqueado após Missão 1)
+  const district2Group = new THREE.Group();
+  district2Group.visible = false;
+  scene.add(district2Group);
+
+  const shopCenterMat = new THREE.MeshStandardMaterial({ color: 0x4f46e5, roughness: 0.35, metalness: 0.2 });
+  const shopGlassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.8, transparent: true, opacity: 0.75 });
+
+  const shopMain = new THREE.Mesh(new THREE.BoxGeometry(26, 14, 18), shopCenterMat);
+  shopMain.position.set(58, 7, 44);
+  shopMain.castShadow = true;
+  shopMain.receiveShadow = true;
+  district2Group.add(shopMain);
+
+  const shopGlass = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 0.4), shopGlassMat);
+  shopGlass.position.set(58, 6, 34.8);
+  district2Group.add(shopGlass);
+
+  const marquee = new THREE.Mesh(
+    new THREE.BoxGeometry(24, 2.5, 1.2),
+    new THREE.MeshStandardMaterial({ color: 0x1e1b4b, emissive: 0x4338ca, emissiveIntensity: 0.4 })
+  );
+  marquee.position.set(58, 13.5, 35.2);
+  district2Group.add(marquee);
+
+  const letters = ['S', 'H', 'O', 'P', 'P', 'I', 'N', 'G', ' ', 'T', 'H', 'E', 'O'];
+  letters.forEach((char, idx) => {
+    if (char === ' ') return;
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 1.4, 0.4),
+      new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.8 })
+    );
+    block.position.set(50 + idx * 1.4, 13.5, 35.8);
+    district2Group.add(block);
+  });
+
+  const iceShop = new THREE.Mesh(new THREE.BoxGeometry(7, 4.5, 6), new THREE.MeshStandardMaterial({ color: 0xf472b6 }));
+  iceShop.position.set(78, 2.25, 38);
+  iceShop.castShadow = true;
+  district2Group.add(iceShop);
+
+  const iceCone = new THREE.Mesh(new THREE.ConeGeometry(1.5, 3, 12), new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.6 }));
+  iceCone.position.set(78, 5.8, 38);
+  iceCone.rotation.x = Math.PI;
+  district2Group.add(iceCone);
+
+  const iceScoop = new THREE.Mesh(new THREE.SphereGeometry(1.4, 12, 12), new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.4 }));
+  iceScoop.position.set(78, 6.2, 38);
+  district2Group.add(iceScoop);
+
+  for (let p = 0; p < 8; p++) {
+    const palmX = 46 + (p % 4) * 9;
+    const palmZ = 24 + Math.floor(p / 4) * 32;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 7, 8), new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 }));
+    trunk.position.set(palmX, 3.5, palmZ);
+    trunk.castShadow = true;
+    district2Group.add(trunk);
+
+    const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.8, 1.6, 8), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6 }));
+    leaves.position.set(palmX, 7.2, palmZ);
+    district2Group.add(leaves);
+  }
+
+  // 2. DISTRITO 3: COMPLEXO ESPORTIVO & ACADEMIA DO PERSONAL INHO (Desbloqueado após Missão 2)
+  const district3Group = new THREE.Group();
+  district3Group.visible = false;
+  scene.add(district3Group);
+
+  const pitchGeo = new THREE.PlaneGeometry(36, 24);
+  pitchGeo.rotateX(-Math.PI / 2);
+  const pitch = new THREE.Mesh(pitchGeo, new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 }));
+  pitch.position.set(-72, 0.02, 20);
+  pitch.receiveShadow = true;
+  district3Group.add(pitch);
+
+  for (const side of [-1, 1]) {
+    const goalX = -72 + side * 17.5;
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 8), postMat);
+    crossbar.rotation.x = Math.PI / 2;
+    crossbar.position.set(goalX, 2.2, 20);
+    district3Group.add(crossbar);
+
+    for (const postZ of [-2.5, 2.5]) {
+      const vPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2, 8), postMat);
+      vPost.position.set(goalX, 1.1, 20 + postZ);
+      district3Group.add(vPost);
+    }
+  }
+
+  const bleachers = new THREE.Mesh(
+    new THREE.BoxGeometry(32, 3.5, 4),
+    new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.6 })
+  );
+  bleachers.position.set(-72, 1.75, 34);
+  bleachers.castShadow = true;
+  district3Group.add(bleachers);
+
+  const gymFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, 14),
+    new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.8 })
+  );
+  gymFloor.rotateX(-Math.PI / 2);
+  gymFloor.position.set(-68, 0.025, -6);
+  district3Group.add(gymFloor);
+
+  const gymBanner = new THREE.Mesh(
+    new THREE.BoxGeometry(14, 2.2, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x0284c7, emissiveIntensity: 0.5 })
+  );
+  gymBanner.position.set(-68, 3.8, 0.5);
+  district3Group.add(gymBanner);
+
+  const rackMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.2 });
+  for (let r = 0; r < 3; r++) {
+    const rx = -74 + r * 6;
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.5, 8), rackMat);
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(rx, 2.4, -6);
+    district3Group.add(bar);
+
+    const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 8), rackMat);
+    leg1.position.set(rx - 1.7, 1.2, -6);
+    district3Group.add(leg1);
+
+    const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 8), rackMat);
+    leg2.position.set(rx + 1.7, 1.2, -6);
+    district3Group.add(leg2);
+  }
+
+  // 3. DISTRITO 4: GRANDE ORLA MARÍTIMA & MARINA DOS BARCOS (Desbloqueado após Missão 3)
+  const district4Group = new THREE.Group();
+  district4Group.visible = false;
+  scene.add(district4Group);
+
+  const pierMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+  const pier = new THREE.Mesh(new THREE.BoxGeometry(10, 0.6, 32), pierMat);
+  pier.position.set(92, 0.4, -38);
+  pier.castShadow = true;
+  pier.receiveShadow = true;
+  district4Group.add(pier);
+
+  for (let pil = 0; pil < 6; pil++) {
+    const pilZ = -50 + pil * 5;
+    for (const pilX of [88, 96]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 3.2, 8), pierMat);
+      post.position.set(pilX, -0.6, pilZ);
+      district4Group.add(post);
+    }
+  }
+
+  const yachtGroup = new THREE.Group();
+  yachtGroup.position.set(104, 0.2, -42);
+  const hull = new THREE.Mesh(
+    new THREE.BoxGeometry(5.5, 1.8, 14),
+    new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2, metalness: 0.3 })
+  );
+  hull.position.y = 0.5;
+  hull.castShadow = true;
+  yachtGroup.add(hull);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(4.2, 2.2, 7.5),
+    new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1, metalness: 0.6 })
+  );
+  cabin.position.set(0, 2.1, -1);
+  yachtGroup.add(cabin);
+
+  const flag = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 1.2, 1.8),
+    new THREE.MeshStandardMaterial({ color: 0x16a34a, emissive: 0xfacc15, emissiveIntensity: 0.3 })
+  );
+  flag.position.set(0, 3.8, -4.5);
+  yachtGroup.add(flag);
+  district4Group.add(yachtGroup);
+
+  for (let k = 0; k < 2; k++) {
+    const kZ = -18 + k * 22;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 2.8, 12), new THREE.MeshStandardMaterial({ color: 0xffedd5 }));
+    base.position.set(80, 1.4, kZ);
+    base.castShadow = true;
+    district4Group.add(base);
+
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.6, 1.8, 12), new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 }));
+    roof.position.set(80, 3.4, kZ);
+    district4Group.add(roof);
+  }
+
+  // 4. DISTRITO 5: GRANDE METRÓPOLE & TORRES DOS CAMPEÕES (Desbloqueado após Missão 4 e 5)
+  const district5Group = new THREE.Group();
+  district5Group.visible = false;
+  scene.add(district5Group);
+
+  const tower = new THREE.Mesh(
+    new THREE.BoxGeometry(20, 48, 18),
+    new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.15, metalness: 0.85 })
+  );
+  tower.position.set(-8, 24, -86);
+  tower.castShadow = true;
+  tower.receiveShadow = true;
+  district5Group.add(tower);
+
+  const heliPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(6, 6, 0.4, 16),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 })
+  );
+  heliPad.position.set(-8, 48.2, -86);
+  district5Group.add(heliPad);
+
+  const heliH = new THREE.Mesh(
+    new THREE.BoxGeometry(3.5, 0.1, 3.5),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.8 })
+  );
+  heliH.position.set(-8, 48.45, -86);
+  district5Group.add(heliH);
+
+  const antenna = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.22, 10, 8),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9 })
+  );
+  antenna.position.set(-8, 53, -86);
+  district5Group.add(antenna);
+
+  const beaconLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 1.5 })
+  );
+  beaconLight.position.set(-8, 58, -86);
+  district5Group.add(beaconLight);
+
+  const archMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, roughness: 0.25 });
+  const archLeft = new THREE.Mesh(new THREE.BoxGeometry(2.5, 14, 2.5), archMat);
+  archLeft.position.set(-16, 7, -62);
+  district5Group.add(archLeft);
+
+  const archRight = new THREE.Mesh(new THREE.BoxGeometry(2.5, 14, 2.5), archMat);
+  archRight.position.set(16, 7, -62);
+  district5Group.add(archRight);
+
+  const archTop = new THREE.Mesh(new THREE.BoxGeometry(34.5, 3.2, 3), archMat);
+  archTop.position.set(0, 14, -62);
+  district5Group.add(archTop);
+
+  const laserBeam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 2.5, 90, 16),
+    new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 1.5, transparent: true, opacity: 0.65 })
+  );
+  laserBeam.position.set(0, 45, -62);
+  district5Group.add(laserBeam);
+
+  // Adiciona novos pontos interativos nos distritos
+  locations.push({
+    id: 'shopping_theo',
+    name: 'Shopping Theo Lucca',
+    category: 'shop',
+    position: new THREE.Vector3(58, 0, 36),
+    markerMesh: new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.1, 16), yellowPaintMat),
+    label: 'Shopping Center',
+    radius: 4.5,
+    isInside: false,
+  });
+
+  locations.push({
+    id: 'academia_personal',
+    name: 'Academia do Personal Inho',
+    category: 'landmark',
+    position: new THREE.Vector3(-68, 0, -6),
+    markerMesh: new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.1, 16), yellowPaintMat),
+    label: 'Academia & Estádio',
+    radius: 4.5,
+    isInside: false,
+  });
+
+  locations.push({
+    id: 'pier_marina',
+    name: 'Píer & Marina da Praia',
+    category: 'landmark',
+    position: new THREE.Vector3(92, 0, -32),
+    markerMesh: new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.1, 16), yellowPaintMat),
+    label: 'Marina da Praia',
+    radius: 4.5,
+    isInside: false,
+  });
+
+  locations.push({
+    id: 'torre_campeoes',
+    name: 'Torre dos Campeões',
+    category: 'landmark',
+    position: new THREE.Vector3(-8, 0, -74),
+    markerMesh: new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.1, 16), yellowPaintMat),
+    label: 'Grande Metrópole',
+    radius: 4.5,
+    isInside: false,
+  });
+
+  // Função para expandir a cidade a cada missão
+  const expandCity = (newLevel: number) => {
+    currentExpansionLevel = Math.max(currentExpansionLevel, Math.min(5, newLevel));
+
+    if (currentExpansionLevel >= 2) {
+      district2Group.visible = true;
+      boxColliders.push({ minX: 44, maxX: 72, minZ: 34, maxZ: 54, name: 'Shopping Theo Lucca' });
+    }
+    if (currentExpansionLevel >= 3) {
+      district3Group.visible = true;
+      boxColliders.push({ minX: -89, maxX: -55, minZ: 10, maxZ: 38, name: 'Estádio de Futebol' });
+    }
+    if (currentExpansionLevel >= 4) {
+      district4Group.visible = true;
+      boxColliders.push({ minX: 86, maxX: 98, minZ: -54, maxZ: -22, name: 'Píer da Marina' });
+    }
+    if (currentExpansionLevel >= 5) {
+      district5Group.visible = true;
+      boxColliders.push({ minX: -19, maxX: 3, minZ: -96, maxZ: -76, name: 'Sky Tower Metrópole' });
+    }
+
+    const districtNames = [
+      '',
+      'Bairro da Oficina & Praça Central',
+      'Bairro Comercial & Shopping Center',
+      'Complexo Esportivo & Academia do Personal Inho',
+      'Orla Marítima & Marina dos Barcos',
+      'Grande Metrópole & Torres dos Campeões',
+    ];
+
+    const districtDescs = [
+      '',
+      'Bairro inicial aberto para exploração!',
+      'Shopping Center Theo Lucca, Sorveteria Tropical e Praça das Palmeiras desbloqueados!',
+      'Mini Estádio de Futebol e Academia ao Ar Livre do Personal Inho liberados!',
+      'Píer Marítimo de madeira, Marina dos Barcos e quiosques tropicais abertos!',
+      'Arranha-Céus gigantes espelhados, Heliponto e Grande Arco Dourado Theo Lucca iluminados!',
+    ];
+
+    return {
+      name: districtNames[currentExpansionLevel] || 'Nova Expansão',
+      desc: districtDescs[currentExpansionLevel] || 'Novo bairro liberado para explorar!',
+      unlockedFeatures: [
+        'Novas avenidas liberadas no mapa',
+        'Novas moedas douradas espalhadas',
+        'Novos veículos e pontos turísticos',
+      ],
+    };
   };
 
   // --- ATUALIZAÇÃO DA CIDADE REALISTA ---
@@ -3221,5 +3573,7 @@ export function createCityScene(): CitySceneObjects {
     beaconGroup,
     setBeaconPosition,
     updateCity,
+    expansionLevel: currentExpansionLevel,
+    expandCity,
   };
 }

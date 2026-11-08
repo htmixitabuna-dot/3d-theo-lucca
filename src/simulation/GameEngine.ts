@@ -4,6 +4,7 @@ import { createTheoLuccaModel, TheoLuccaRig } from './TheoLuccaModel';
 import { createCityScene, CitySceneObjects, CityCar, CityMoto, CityNPC } from './CityScene';
 import { soundManager } from './audio';
 import { PhasesManager } from './PhasesManager';
+import { cityVoiceManager } from './voiceManager';
 
 export interface BackpackItem {
   id: string;
@@ -62,6 +63,17 @@ export interface CityHUDState {
   lightTubeDist: number;
   phaseTargetCount: number;
   phaseTargetTotal: number;
+  // Expansão Dinâmica da Cidade & Mini-mapa de Navegação GPS
+  cityExpansionLevel: number;
+  playerX: number;
+  playerZ: number;
+  playerRotationY: number;
+  targetBeaconPos: { x: number; z: number; name?: string } | null;
+  allLocations: { id: string; name: string; category: string; x: number; z: number }[];
+  allNPCs: { name: string; role: string; gender: 'male' | 'female'; x: number; z: number }[];
+  allCars: { x: number; z: number; colorName: string }[];
+  allMotos: { x: number; z: number; colorName: string }[];
+  expansionAnnouncement?: { name: string; desc: string } | null;
 }
 
 export interface GameEngineCallbacks {
@@ -70,6 +82,7 @@ export interface GameEngineCallbacks {
   onJobCompleted: (jobName: string, reward: number) => void;
   onMissionCompleted: (missionTitle: string, reward: number) => void;
   onItemPurchased: (item: BackpackItem) => void;
+  onCityExpanded?: (districtName: string, desc: string) => void;
 }
 
 export class GameEngine {
@@ -133,6 +146,10 @@ export class GameEngine {
   private collectedAvaritia = 0;
   private totalAvaritia = 8;
   private teleportCooldown = 0;
+
+  // Sistema de Expansão Dinâmica da Cidade
+  private cityExpansionLevel = 1;
+  private expansionAnnouncement: { name: string; desc: string } | null = null;
 
   // Interação e Acenar
   private waveTimer = 0;
@@ -249,14 +266,14 @@ export class GameEngine {
     soundManager.playCuteHorn();
   }
 
-  // Acenar / Falar com NPCs
+  // Acenar / Falar com NPCs com vozes masculinas e femininas reais em PT-BR
   public waveAndSpeak() {
     this.waveTimer = 2.2;
     soundManager.playWaveHello();
 
-    // Encontra o NPC mais próximo
+    // Encontra o NPC mais próximo (até 8.0 metros)
     let nearest: CityNPC | null = null;
-    let minDist = 7.0;
+    let minDist = 8.0;
 
     for (const npc of this.cityScene.npcs) {
       const d = npc.group.position.distanceTo(this.playerPos);
@@ -268,11 +285,18 @@ export class GameEngine {
 
     if (nearest) {
       const targetNPC: CityNPC = nearest;
-      this.dialogueText = `${targetNPC.name}: "${targetNPC.phrase}"`;
+      const tipsList = targetNPC.tips && targetNPC.tips.length > 0 ? targetNPC.tips : [targetNPC.phrase];
+      const randomTip = tipsList[Math.floor(Math.random() * tipsList.length)];
+      this.dialogueText = `${targetNPC.name}: "${randomTip}"`;
+      
+      // Fala em voz alta em português do Brasil com a voz do personagem (masculina ou feminina)
+      cityVoiceManager.speak(targetNPC.name, randomTip, targetNPC.gender || 'male', true);
     } else {
-      this.dialogueText = 'Theo Lucca: "Oi cidade linda! Bom dia a todos!"';
+      // Theo Lucca falando sozinho animado
+      cityVoiceManager.speakTheoLucca();
+      this.dialogueText = 'Theo Lucca: "Oi cidade linda! Vamos cumprir as missões e expandir o mapa!"';
     }
-    this.dialogueTimer = 4.0;
+    this.dialogueTimer = 6.0;
   }
 
   // --- SISTEMA DE COLISÃO REALISTA (PAREDES, ÁRVORES, VEÍCULOS) ---
@@ -666,10 +690,24 @@ export class GameEngine {
       soundManager.playMissionComplete();
       this.callbacks.onMissionCompleted(mission.title, mission.reward);
 
+      // EXPANSÃO DA CIDADE: A cada missão cumprida, a cidade fica maior!
+      this.cityExpansionLevel = Math.min(5, this.cityExpansionLevel + 1);
+      const districtInfo = this.cityScene.expandCity(this.cityExpansionLevel);
+      this.expansionAnnouncement = { name: districtInfo.name, desc: districtInfo.desc };
+      this.callbacks.onCityExpanded?.(districtInfo.name, districtInfo.desc);
+
+      // Locutor fala em português que a cidade cresceu e novo bairro foi liberado!
+      cityVoiceManager.speak(
+        'Cidade Real',
+        `Parabéns Theo Lucca! A cidade ficou maior! ${districtInfo.name} agora está desbloqueado no seu mapa de navegação!`,
+        'male',
+        true
+      );
+
       // ATIVA O TUBO DE LUZ AUTOMATICAMENTE AO CUMPRIR A MISSÃO!
       const portalPos = this.phasesManager.activateLightTubeForCurrentPhase();
       this.cityScene.setBeaconPosition(portalPos);
-      this.dialogueText = "✨ MISSÃO CUMPRIDA! O TUBO DE LUZ APARECEU! Vá até o feixe de luz para ir para a próxima fase! 🌀";
+      this.dialogueText = `🎉 MISSÃO CUMPRIDA! CIDADE EXPANDIDA: ${districtInfo.name.toUpperCase()} AGORA ABERTO NO MAPA! 🗺️✨`;
       this.dialogueTimer = 10.0;
 
       if (this.currentMissionIndex < this.missions.length - 1) {
@@ -718,6 +756,7 @@ export class GameEngine {
     if (this.currentPhase === 1) {
       this.cityScene.updateCity(now * 0.001, delta, this.playerPos);
       this.checkCoinPickups();
+      this.checkNPCVoiceGreetings();
     }
 
     this.phasesManager.update(delta, now * 0.001);
@@ -1088,6 +1127,31 @@ export class GameEngine {
     });
   }
 
+  // Saudação por voz em português quando Theo Lucca se aproxima das pessoas na cidade
+  private checkNPCVoiceGreetings() {
+    for (const npc of this.cityScene.npcs) {
+      const d = npc.group.position.distanceTo(this.playerPos);
+      if (d < 4.2) {
+        const tipsList = npc.tips && npc.tips.length > 0 ? npc.tips : [npc.phrase];
+        const randomTip = tipsList[Math.floor(Math.random() * tipsList.length)];
+        const spoke = cityVoiceManager.speak(npc.name, randomTip, npc.gender || 'male', false);
+        if (spoke) {
+          this.dialogueText = `${npc.name}: "${randomTip}"`;
+          this.dialogueTimer = 5.5;
+        }
+        break;
+      }
+    }
+  }
+
+  // Define destino do GPS quando o jogador clica no mapa
+  public setGPSDestination(x: number, z: number, name: string) {
+    const dest = new THREE.Vector3(x, 0, z);
+    this.cityScene.setBeaconPosition(dest);
+    this.dialogueText = `GPS: Destino marcado para ${name}! Siga o feixe dourado!`;
+    this.dialogueTimer = 4.0;
+  }
+
   private checkCourseCollectibles() {
     for (const item of this.phasesManager.courseItems) {
       if (!item.collected && item.phase === this.currentPhase) {
@@ -1353,6 +1417,41 @@ export class GameEngine {
       lightTubeDist,
       phaseTargetCount,
       phaseTargetTotal,
+      // Expansão Dinâmica da Cidade & Mini-mapa de Navegação GPS
+      cityExpansionLevel: this.cityExpansionLevel,
+      playerX: this.playerPos.x,
+      playerZ: this.playerPos.z,
+      playerRotationY: this.playerRotationY,
+      targetBeaconPos: this.activeJob
+        ? { x: this.activeJob.targetPos.x, z: this.activeJob.targetPos.z, name: this.activeJob.targetName }
+        : (isLightTubeActive
+          ? { x: this.phasesManager.lightTube.getPosition().x, z: this.phasesManager.lightTube.getPosition().z, name: 'Tubo de Luz' }
+          : null),
+      allLocations: this.cityScene.locations.map((l) => ({
+        id: l.id,
+        name: l.name,
+        category: l.category,
+        x: l.position.x,
+        z: l.position.z,
+      })),
+      allNPCs: this.cityScene.npcs.map((n) => ({
+        name: n.name,
+        role: n.role,
+        gender: n.gender || 'male',
+        x: n.group.position.x,
+        z: n.group.position.z,
+      })),
+      allCars: this.cityScene.cars.map((c) => ({
+        x: c.group.position.x,
+        z: c.group.position.z,
+        colorName: c.colorName,
+      })),
+      allMotos: this.cityScene.motorcycles.map((m) => ({
+        x: m.group.position.x,
+        z: m.group.position.z,
+        colorName: m.colorName,
+      })),
+      expansionAnnouncement: this.expansionAnnouncement,
     });
   }
 
