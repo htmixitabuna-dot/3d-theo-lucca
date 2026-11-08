@@ -150,6 +150,7 @@ export class GameEngine {
   // Sistema de Expansão Dinâmica da Cidade
   private cityExpansionLevel = 1;
   private expansionAnnouncement: { name: string; desc: string } | null = null;
+  private customGPSDestination: { x: number; z: number; name: string } | null = null;
 
   // Interação e Acenar
   private waveTimer = 0;
@@ -163,6 +164,7 @@ export class GameEngine {
   private isPaused = false;
   private lastTime = 0;
   private stepTimer = 0;
+  private hudThrottleTimer = 0;
 
   private keysPressed: Record<string, boolean> = {};
 
@@ -212,6 +214,8 @@ export class GameEngine {
     this.player.root.position.copy(this.playerPos);
     this.player.root.rotation.y = this.playerRotationY;
     this.cityScene.scene.add(this.player.root);
+    // Sinaliza o primeiro objetivo de missão no mundo 3D (Oficina Mecânica)
+    this.cityScene.setBeaconPosition(new THREE.Vector3(32, 0, -24));
 
     window.addEventListener('resize', this.onWindowResize);
     window.addEventListener('keydown', this.onKeyDown);
@@ -762,7 +766,12 @@ export class GameEngine {
     this.phasesManager.update(delta, now * 0.001);
     this.checkCourseCollectibles();
     this.checkPhaseMissionsAndTeleport(delta);
-    this.dispatchHUDData();
+    
+    this.hudThrottleTimer += delta;
+    if (this.hudThrottleTimer >= 0.033) {
+      this.hudThrottleTimer = 0;
+      this.dispatchHUDData();
+    }
 
     this.renderer.render(this.cityScene.scene, this.camera);
 
@@ -1147,6 +1156,7 @@ export class GameEngine {
   // Define destino do GPS quando o jogador clica no mapa
   public setGPSDestination(x: number, z: number, name: string) {
     const dest = new THREE.Vector3(x, 0, z);
+    this.customGPSDestination = { x, z, name };
     this.cityScene.setBeaconPosition(dest);
     this.dialogueText = `GPS: Destino marcado para ${name}! Siga o feixe dourado!`;
     this.dialogueTimer = 4.0;
@@ -1305,6 +1315,22 @@ export class GameEngine {
     this.dialogueTimer = 6.0;
   }
 
+  public getDefaultMissionTarget(): { x: number; z: number; name: string } {
+    switch (this.currentMissionIndex) {
+      case 0:
+        return { x: 32, z: -24, name: 'Oficina Theo Lucca (Trabalhar)' };
+      case 1:
+        return { x: 0, z: 0, name: 'Praça Central (Moedas Douradas)' };
+      case 2:
+        return { x: -36, z: 26, name: 'Loja de Brinquedos (Bola de Futebol)' };
+      case 3:
+        return { x: -18, z: -22, name: 'Pizzaria (Entregar Pizzas)' };
+      case 4:
+      default:
+        return { x: -36, z: 26, name: 'Loja de Brinquedos (Carrinho)' };
+    }
+  }
+
   private dispatchHUDData() {
     let nearestLoc = this.getNearestLocation();
 
@@ -1346,14 +1372,22 @@ export class GameEngine {
       ? this.playerPos.distanceTo(this.phasesManager.lightTube.getPosition())
       : 999;
 
-    let distanceToTarget = 0;
-    if (isLightTubeActive) {
-      distanceToTarget = lightTubeDist;
-    } else if (this.activeJob) {
-      distanceToTarget = this.playerPos.distanceTo(this.activeJob.targetPos);
-    } else if (nearestLoc) {
-      distanceToTarget = nearestLoc.dist;
+    // Alvo do Objetivo / GPS (sempre ativo para guiar o Theo Lucca)
+    let targetBeaconPos: { x: number; z: number; name?: string } | null = null;
+    if (this.activeJob) {
+      targetBeaconPos = { x: this.activeJob.targetPos.x, z: this.activeJob.targetPos.z, name: this.activeJob.targetName };
+    } else if (this.customGPSDestination) {
+      targetBeaconPos = this.customGPSDestination;
+    } else if (isLightTubeActive) {
+      const pos = this.phasesManager.lightTube.getPosition();
+      targetBeaconPos = { x: pos.x, z: pos.z, name: 'Tubo de Luz (Portal)' };
+    } else {
+      targetBeaconPos = this.getDefaultMissionTarget();
     }
+
+    const distanceToTarget = targetBeaconPos
+      ? Math.hypot(this.playerPos.x - targetBeaconPos.x, this.playerPos.z - targetBeaconPos.z)
+      : (nearestLoc ? nearestLoc.dist : 0);
 
     let phaseName = 'Cidade Real 3D (Oficina & Bairro)';
     let currentMission = this.missions[this.currentMissionIndex] || this.missions[0];
@@ -1422,11 +1456,7 @@ export class GameEngine {
       playerX: this.playerPos.x,
       playerZ: this.playerPos.z,
       playerRotationY: this.playerRotationY,
-      targetBeaconPos: this.activeJob
-        ? { x: this.activeJob.targetPos.x, z: this.activeJob.targetPos.z, name: this.activeJob.targetName }
-        : (isLightTubeActive
-          ? { x: this.phasesManager.lightTube.getPosition().x, z: this.phasesManager.lightTube.getPosition().z, name: 'Tubo de Luz' }
-          : null),
+      targetBeaconPos,
       allLocations: this.cityScene.locations.map((l) => ({
         id: l.id,
         name: l.name,

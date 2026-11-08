@@ -82,6 +82,10 @@ export interface CityNPC {
   rightLeg: THREE.Group;
   isWaving: boolean;
   isInsideBuilding?: boolean;
+  waypoints: THREE.Vector3[];
+  waypointIndex: number;
+  walkSpeed: number;
+  pauseTimer: number;
 }
 
 export interface StreetCoin {
@@ -2933,8 +2937,69 @@ export function createCityScene(): CitySceneObjects {
     return { group: npcGroup, head, leftArm, rightArm, leftLeg, rightLeg };
   };
 
+  const npcWaypointsMap: Record<string, { waypoints: THREE.Vector3[]; speed: number }> = {
+    'Personal Inho': {
+      waypoints: [new THREE.Vector3(14, 0, 36), new THREE.Vector3(26, 0, 36), new THREE.Vector3(26, 0, 18), new THREE.Vector3(14, 0, 18)],
+      speed: 2.1,
+    },
+    'Vovó Maria': {
+      waypoints: [new THREE.Vector3(22, 0, 24), new THREE.Vector3(26, 0, 30), new THREE.Vector3(16, 0, 32), new THREE.Vector3(14, 0, 20), new THREE.Vector3(20, 0, 16)],
+      speed: 1.15,
+    },
+    'Mecânico Zeca': {
+      waypoints: [new THREE.Vector3(31.5, 0, -23.5), new THREE.Vector3(34.5, 0, -26), new THREE.Vector3(28.5, 0, -26), new THREE.Vector3(28.5, 0, -21)],
+      speed: 1.25,
+    },
+    'Padeiro Seu Zé': {
+      waypoints: [new THREE.Vector3(-42, 0, -20), new THREE.Vector3(-42, 0, -32), new THREE.Vector3(-36, 0, -32), new THREE.Vector3(-36, 0, -20)],
+      speed: 1.3,
+    },
+    'Florista Dona Rosa': {
+      waypoints: [new THREE.Vector3(26, 0, 20), new THREE.Vector3(34, 0, 26), new THREE.Vector3(34, 0, 14), new THREE.Vector3(24, 0, 12)],
+      speed: 1.2,
+    },
+    'Marina': {
+      waypoints: [new THREE.Vector3(76, 0, -18), new THREE.Vector3(78, 0, -38), new THREE.Vector3(78, 0, -5), new THREE.Vector3(75, 0, 12), new THREE.Vector3(74, 0, -8)],
+      speed: 1.45,
+    },
+    'Policial Amigo': {
+      waypoints: [new THREE.Vector3(8.5, 0, 8.5), new THREE.Vector3(8.5, 0, 28), new THREE.Vector3(-8.5, 0, 28), new THREE.Vector3(-8.5, 0, 8.5)],
+      speed: 1.4,
+    },
+    'Dona Carmen': {
+      waypoints: [new THREE.Vector3(-20, 0, 22), new THREE.Vector3(-20, 0, 38), new THREE.Vector3(-32, 0, 38), new THREE.Vector3(-32, 0, 22)],
+      speed: 1.3,
+    },
+    'Carteiro Carlos': {
+      waypoints: [new THREE.Vector3(-44, 0, -59), new THREE.Vector3(-20, 0, -59), new THREE.Vector3(-20, 0, -48), new THREE.Vector3(-44, 0, -48)],
+      speed: 1.6,
+    },
+    'Pedrinho': {
+      waypoints: [new THREE.Vector3(-24, 0, 52), new THREE.Vector3(-14, 0, 56), new THREE.Vector3(-10, 0, 44), new THREE.Vector3(-26, 0, 44)],
+      speed: 1.85,
+    },
+    'Bia': {
+      waypoints: [new THREE.Vector3(-34, 0, 52), new THREE.Vector3(-28, 0, 54), new THREE.Vector3(-26, 0, 46), new THREE.Vector3(-38, 0, 46)],
+      speed: 1.75,
+    },
+    'Sr. João': {
+      waypoints: [new THREE.Vector3(-32, 0, -59), new THREE.Vector3(-15, 0, -59), new THREE.Vector3(-15, 0, -68), new THREE.Vector3(-32, 0, -68)],
+      speed: 1.25,
+    },
+  };
+
   npcsData.forEach((data) => {
     const { group, head, leftArm, rightArm, leftLeg, rightLeg } = createStylizedCitizen(data);
+    const config = npcWaypointsMap[data.name] || {
+      waypoints: [
+        data.pos.clone(),
+        data.pos.clone().add(new THREE.Vector3(7, 0, 0)),
+        data.pos.clone().add(new THREE.Vector3(7, 0, 7)),
+        data.pos.clone().add(new THREE.Vector3(0, 0, 7)),
+      ],
+      speed: 1.3,
+    };
+
     npcs.push({
       group,
       name: data.name,
@@ -2950,6 +3015,11 @@ export function createCityScene(): CitySceneObjects {
       leftLeg,
       rightLeg,
       isWaving: false,
+      isInsideBuilding: data.isInsideBuilding,
+      waypoints: config.waypoints,
+      waypointIndex: 0,
+      walkSpeed: config.speed,
+      pauseTimer: Math.random() * 1.5,
     });
   });
 
@@ -3504,30 +3574,74 @@ export function createCityScene(): CitySceneObjects {
       }
     });
 
-    // 3. Atualização dos NPCs
+    // 3. Atualização dos NPCs: Caminhada Livre pelas Ruas, Calçadas e Praças da Cidade
     for (const npc of npcs) {
-      const distToTheo = npc.group.position.distanceTo(theoPos);
+      const curPos = npc.group.position;
+      const distToTheo = curPos.distanceTo(theoPos);
 
-      if (distToTheo < 5.0) {
+      if (distToTheo < 4.8) {
+        // PERTO DO THEO LUCCA: Pausa e vira para cumprimentar Theo Lucca com aceno alegre
         npc.isWaving = true;
-        const lookDir = Math.atan2(theoPos.x - npc.group.position.x, theoPos.z - npc.group.position.z);
-        npc.group.rotation.y = lookDir;
+        const lookDir = Math.atan2(theoPos.x - curPos.x, theoPos.z - curPos.z);
+        let angleDiff = lookDir - npc.group.rotation.y;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        npc.group.rotation.y += angleDiff * Math.min(1.0, delta * 5.0);
 
         npc.rightArm.rotation.x = -2.2;
-        npc.rightArm.rotation.z = Math.sin(timeSec * 10) * 0.35;
+        npc.rightArm.rotation.z = Math.sin(timeSec * 9) * 0.35;
         npc.leftArm.rotation.x = 0;
         npc.leftLeg.rotation.x = 0;
         npc.rightLeg.rotation.x = 0;
       } else {
+        // ANDANDO LIVREMENTE PELA CIDADE
         npc.isWaving = false;
-        npc.walkTimer += delta;
 
-        const walkCycle = Math.sin(timeSec * 6);
-        npc.leftArm.rotation.x = walkCycle * 0.45;
-        npc.rightArm.rotation.x = -walkCycle * 0.45;
-        npc.rightArm.rotation.z = 0;
-        npc.leftLeg.rotation.x = -walkCycle * 0.45;
-        npc.rightLeg.rotation.x = walkCycle * 0.45;
+        // Se estiver em pausa breve apreciando a cidade
+        if (npc.pauseTimer > 0) {
+          npc.pauseTimer -= delta;
+          npc.leftArm.rotation.x = Math.sin(timeSec * 2) * 0.05;
+          npc.rightArm.rotation.x = -Math.sin(timeSec * 2) * 0.05;
+          npc.rightArm.rotation.z = 0;
+          npc.leftLeg.rotation.x = 0;
+          npc.rightLeg.rotation.x = 0;
+        } else if (npc.waypoints && npc.waypoints.length > 0) {
+          const targetWp = npc.waypoints[npc.waypointIndex];
+          const dx = targetWp.x - curPos.x;
+          const dz = targetWp.z - curPos.z;
+          const distToWp = Math.hypot(dx, dz);
+
+          if (distToWp < 0.9) {
+            // Chegou no waypoint! Avança para o próximo ponto
+            npc.waypointIndex = (npc.waypointIndex + 1) % npc.waypoints.length;
+            // 35% de chance de pausar brevemente olhando ao redor
+            if (Math.random() < 0.35) {
+              npc.pauseTimer = 1.6 + Math.random() * 2.4;
+            }
+          } else {
+            // Rotação suave na direção do próximo waypoint
+            const targetAngle = Math.atan2(dx, dz);
+            let angleDiff = targetAngle - npc.group.rotation.y;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            npc.group.rotation.y += angleDiff * Math.min(1.0, delta * 5.5);
+
+            // Deslocamento real do pedestre para frente
+            const step = npc.walkSpeed * delta;
+            curPos.x += Math.sin(npc.group.rotation.y) * step;
+            curPos.z += Math.cos(npc.group.rotation.y) * step;
+            npc.position.copy(curPos);
+
+            // Animação de braços e pernas proporcional à velocidade
+            npc.walkTimer += delta * (npc.walkSpeed * 3.6);
+            const walkCycle = Math.sin(npc.walkTimer);
+            npc.leftArm.rotation.x = walkCycle * 0.5;
+            npc.rightArm.rotation.x = -walkCycle * 0.5;
+            npc.rightArm.rotation.z = 0;
+            npc.leftLeg.rotation.x = -walkCycle * 0.55;
+            npc.rightLeg.rotation.x = walkCycle * 0.55;
+          }
+        }
       }
     }
 

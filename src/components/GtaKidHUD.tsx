@@ -371,8 +371,8 @@ export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
         </div>
 
         {/* 3. RADAR GTA REDONDO + BOTÕES DE MENU */}
-        <div className="pointer-events-auto flex items-center gap-1.5">
-          <div className="flex flex-col gap-1">
+        <div className="pointer-events-auto flex items-start gap-1.5">
+          <div className="flex flex-col gap-1.5 pt-0.5">
             <button
               onClick={() => {
                 const nextMuted = !isMuted;
@@ -463,27 +463,6 @@ export const GtaKidHUD: React.FC<GtaKidHUDProps> = ({
         </div>
       )}
 
-      {/* =========================================================================
-          ANÚNCIO DE CIDADE EXPANDIDA (NOVO BAIRRO DESBLOQUEADO)
-         ========================================================================= */}
-      {hudState.expansionAnnouncement && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-40 pointer-events-auto max-w-md w-full px-4 animate-bounce">
-          <div className="bg-gradient-to-r from-emerald-600 via-amber-500 to-yellow-400 text-slate-950 border-[3px] border-white rounded-2xl p-3 text-center shadow-[0_0_40px_rgba(245,158,11,0.8)]">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-2xl animate-spin">🏗️</span>
-              <div className="min-w-0 text-center flex-1">
-                <p className="text-xs sm:text-sm font-black font-['Rajdhani'] uppercase tracking-wider text-slate-950 leading-tight">
-                  CIDADE EXPANDIDA COM SUCESSO!
-                </p>
-                <p className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">
-                  {hudState.expansionAnnouncement.name} desbloqueado no mapa!
-                </p>
-              </div>
-              <span className="text-2xl animate-spin">✨</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           BALÃO DE DIÁLOGO DINÂMICO DOS NPCS ("OI THEO!", CONVERSAS E DICAS)
